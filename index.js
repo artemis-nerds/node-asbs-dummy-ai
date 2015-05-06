@@ -15,9 +15,10 @@ var parser = new ArgumentParser({
 parser.addArgument( [ '-H', '--host' ], { help: 'IP or hostname of the game server to connect to.' } );
 parser.addArgument( [ '-p', '--port' ], { help: 'TCP port of the game server to connect to (defaults to 2010).' , defaultValue: 2010} );
 parser.addArgument( [ '-s', '--ship' ], { help: 'Ship index, 1 to 8 (defaults to 1)', defaultValue: 1 } );
+parser.addArgument( [ '-l', '--local' ], { help: 'Local IP address to connect from, use only when several (virtual) network interfaces are present.' } );
 
 var args = parser.parseArgs();
-
+args.ship = parseInt(args.ship,10);
 
 function radiansToHeading(rads) {
 	// Heading is -Math.PI for 0, 0 for 180, and +Math.PI for 360.
@@ -26,9 +27,12 @@ function radiansToHeading(rads) {
 
 var ship = {};
 var shipName = '';
+var shipID = null;
 
 var sock = new asbs.Socket();
 
+
+// Shorthand functions
 
 function sendComm(str){
 	if (!shipName) return;
@@ -86,12 +90,20 @@ function init() {
 	var rudder = 0.4 + Math.random() * 0.2;
 	console.log('Setting rudder to ', rudder);
 	setRudder( rudder );
+// 	sock.send('setMainScreen',{view: 'longRange'});
 }
+
+
+
+
+
+
 
 sock.on('connect', function(){
 	sock.send('setPlayerShipIndex', {playerShipIndex: args.ship -1 });
 	sock.send('setConsole',{console: 'helm' , selected: true});
 	sock.send('setConsole',{console: 'gameMaster' , selected: true});
+	sock.send('setReady',{});
 	init();
 });
 
@@ -105,6 +117,20 @@ sock.on('allPlayerShipsSettings', function(data){
 });
 
 sock.on('playerShip', function(update) {
+	
+	if (shipID !== null && update.id !== shipID) return;
+
+	if ('playerShipIndex' in update.data) {
+		console.log('shipindex %d is ID %d (mine is %d)', update.data.playerShipIndex, update.id, args.ship);
+		
+		if (update.data.playerShipIndex != args.ship) return;
+		if (!shipID) {
+			shipID = update.id;
+		}
+	}
+	if (!shipID) {
+		return;
+	}
 	
 	for (var i in update.data) {
 		ship[i] = update.data[i];
@@ -150,7 +176,8 @@ sock.on('playerShip', function(update) {
 		setImpulse(1.0);
 	}
 	
-	console.log('ENE: %d, WRP: %d, IMP: %d, RUD: %d, VEL: %d, HDG: %d, X: %d, Z: %d', 
+	console.log('ID: %d, ENE: %d, WRP: %d, IMP: %d, RUD: %d, VEL: %d, HDG: %d, X: %d, Z: %d', 
+		    Math.round(update.id), 
 		    Math.round(ship.energy), 
 		    Math.round(ship.warp), 
 		    Math.round(ship.impulseSpeed * 100) / 100, 
@@ -162,6 +189,9 @@ sock.on('playerShip', function(update) {
 	);
 	
 // 	console.dir(ship);
+// 	if (Object.keys(update.data).length > 10) {
+// 		console.dir(update.data);
+// 	}
 });
 
 
@@ -169,5 +199,14 @@ sock.on('error', function(err) {
 	console.error(err);
 });
 
-sock.connect({ host: args.host, port: args.port });
+sock.on('unparsed', function(err) {
+	console.error(err.toString());
+	console.error(err.stack);
+});
+
+sock.connect({ 
+	host: args.host, 
+	port: args.port,
+	localAddress: args.local
+});
 
