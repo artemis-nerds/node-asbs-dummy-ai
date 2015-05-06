@@ -85,6 +85,7 @@ function turnRight()    {
 }
 
 function init() {
+	shipID = null;
 	ship = {};
 	setImpulse(1.0);
 	var rudder = 0.4 + Math.random() * 0.2;
@@ -116,6 +117,14 @@ sock.on('allPlayerShipsSettings', function(data){
 	
 });
 
+sock.on('remove', function(data){
+	if (data.type === 'player' && data.id === shipID) {
+		sendComm("We've been destroyed!");
+		init();
+	}
+	
+});
+
 sock.on('playerShip', function(update) {
 	
 	if (shipID !== null && update.id !== shipID) return;
@@ -129,6 +138,7 @@ sock.on('playerShip', function(update) {
 		}
 	}
 	if (!shipID) {
+		console.log("I don't know my ship ID yet.");
 		return;
 	}
 	
@@ -193,7 +203,6 @@ sock.on('playerShip', function(update) {
 // 		console.dir(update.data);
 // 	}
 });
-
 
 sock.on('error', function(err) {
 	console.error(err);
